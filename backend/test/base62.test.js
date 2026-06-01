@@ -24,11 +24,16 @@ test("encodes values larger than the character set", () => {
   assert.equal(encodeBase62(3844), "100");
 });
 
+test("encodes BigInt values from PostgreSQL IDs", () => {
+  assert.equal(encodeBase62(3844n), "100");
+});
+
 test("rejects values that cannot produce reliable short codes", () => {
-  assert.throws(() => encodeBase62(-1), /non-negative safe integer/);
-  assert.throws(() => encodeBase62(1.5), /non-negative safe integer/);
+  assert.throws(() => encodeBase62(-1), /non-negative integer/);
+  assert.throws(() => encodeBase62(-1n), /non-negative integer/);
+  assert.throws(() => encodeBase62(1.5), /non-negative integer/);
   assert.throws(
     () => encodeBase62(Number.MAX_SAFE_INTEGER + 1),
-    /non-negative safe integer/
+    /non-negative integer/
   );
 });
