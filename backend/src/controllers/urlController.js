@@ -20,6 +20,19 @@ async function createShortUrl(req, res, next) {
   }
 }
 
+async function redirectToLongUrl(req, res, next) {
+  try {
+    const result = await shortenerService.getRedirectTarget({
+      shortCode: req.params.shortCode,
+    });
+
+    res.redirect(302, result.longUrl);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   createShortUrl,
+  redirectToLongUrl,
 };

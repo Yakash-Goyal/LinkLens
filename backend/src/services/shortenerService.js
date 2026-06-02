@@ -24,6 +24,14 @@ function formatBaseUrl(baseUrl) {
   return baseUrl.replace(/\/+$/, "");
 }
 
+function isExpired(record, now = new Date()) {
+  if (!record.expires_at) {
+    return false;
+  }
+
+  return new Date(record.expires_at) <= now;
+}
+
 async function createShortUrl(
   { longUrl, expiresAt = null, baseUrl },
   dependencies = {}
@@ -54,7 +62,30 @@ async function createShortUrl(
   };
 }
 
+async function getRedirectTarget({ shortCode }, dependencies = {}) {
+  const repository = dependencies.urlRepository || urlRepository;
+  const now = dependencies.now || new Date();
+  const record = await repository.findByShortCode(shortCode);
+
+  if (!record) {
+    throw createHttpError(404, "Short URL not found");
+  }
+
+  if (isExpired(record, now)) {
+    throw createHttpError(410, "Short URL has expired");
+  }
+
+  await repository.incrementClickCount(shortCode);
+
+  return {
+    longUrl: record.long_url,
+    shortCode: record.short_code,
+  };
+}
+
 module.exports = {
   createShortUrl,
+  getRedirectTarget,
+  isExpired,
   validateHttpUrl,
 };

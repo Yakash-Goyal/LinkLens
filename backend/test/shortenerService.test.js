@@ -3,6 +3,8 @@ const test = require("node:test");
 
 const {
   createShortUrl,
+  getRedirectTarget,
+  isExpired,
   validateHttpUrl,
 } = require("../src/services/shortenerService");
 
@@ -85,5 +87,106 @@ test("rejects invalid long URLs before writing to storage", async () => {
         { urlRepository }
       ),
     /valid http or https longUrl/
+  );
+});
+
+test("checks whether a URL record is expired", () => {
+  const now = new Date("2026-06-02T10:00:00.000Z");
+
+  assert.equal(isExpired({ expires_at: null }, now), false);
+  assert.equal(
+    isExpired({ expires_at: "2026-06-02T10:00:01.000Z" }, now),
+    false
+  );
+  assert.equal(
+    isExpired({ expires_at: "2026-06-02T09:59:59.000Z" }, now),
+    true
+  );
+});
+
+test("returns redirect target and increments click count", async () => {
+  const calls = [];
+  const urlRepository = {
+    async findByShortCode(shortCode) {
+      calls.push(["find", shortCode]);
+
+      return {
+        short_code: shortCode,
+        long_url: "https://example.com/report",
+        expires_at: null,
+      };
+    },
+    async incrementClickCount(shortCode) {
+      calls.push(["increment", shortCode]);
+    },
+  };
+
+  const result = await getRedirectTarget(
+    {
+      shortCode: "100",
+    },
+    { urlRepository }
+  );
+
+  assert.deepEqual(calls, [
+    ["find", "100"],
+    ["increment", "100"],
+  ]);
+  assert.deepEqual(result, {
+    longUrl: "https://example.com/report",
+    shortCode: "100",
+  });
+});
+
+test("returns 404 when redirect short code is missing", async () => {
+  const urlRepository = {
+    async findByShortCode() {
+      return null;
+    },
+    async incrementClickCount() {
+      throw new Error("Click count should not be incremented");
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      getRedirectTarget(
+        {
+          shortCode: "missing",
+        },
+        { urlRepository }
+      ),
+    (error) =>
+      error.statusCode === 404 && error.message === "Short URL not found"
+  );
+});
+
+test("returns 410 when redirect short code is expired", async () => {
+  const urlRepository = {
+    async findByShortCode(shortCode) {
+      return {
+        short_code: shortCode,
+        long_url: "https://example.com/report",
+        expires_at: "2026-06-02T09:59:59.000Z",
+      };
+    },
+    async incrementClickCount() {
+      throw new Error("Expired links should not increment clicks");
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      getRedirectTarget(
+        {
+          shortCode: "100",
+        },
+        {
+          urlRepository,
+          now: new Date("2026-06-02T10:00:00.000Z"),
+        }
+      ),
+    (error) =>
+      error.statusCode === 410 && error.message === "Short URL has expired"
   );
 });
