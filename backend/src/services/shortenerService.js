@@ -1,3 +1,4 @@
+const analyticsService = require("./analyticsService");
 const urlRepository = require("../repositories/urlRepository");
 const { encodeBase62 } = require("../utils/base62");
 
@@ -62,8 +63,10 @@ async function createShortUrl(
   };
 }
 
-async function getRedirectTarget({ shortCode }, dependencies = {}) {
+async function getRedirectTarget({ shortCode, analyticsContext }, dependencies = {}) {
   const repository = dependencies.urlRepository || urlRepository;
+  const analytics = dependencies.analyticsService || analyticsService;
+  const logger = dependencies.logger || console;
   const now = dependencies.now || new Date();
   const record = await repository.findByShortCode(shortCode);
 
@@ -76,6 +79,17 @@ async function getRedirectTarget({ shortCode }, dependencies = {}) {
   }
 
   await repository.incrementClickCount(shortCode);
+
+  if (analyticsContext) {
+    try {
+      await analytics.recordClickEvent({
+        shortCode,
+        ...analyticsContext,
+      });
+    } catch (error) {
+      logger.warn("Click analytics recording failed", error);
+    }
+  }
 
   return {
     longUrl: record.long_url,

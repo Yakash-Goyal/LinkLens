@@ -138,6 +138,97 @@ test("returns redirect target and increments click count", async () => {
   });
 });
 
+test("records click analytics when redirect metadata is provided", async () => {
+  const calls = [];
+  const urlRepository = {
+    async findByShortCode(shortCode) {
+      calls.push(["find", shortCode]);
+
+      return {
+        short_code: shortCode,
+        long_url: "https://example.com/report",
+        expires_at: null,
+      };
+    },
+    async incrementClickCount(shortCode) {
+      calls.push(["increment", shortCode]);
+    },
+  };
+  const analyticsService = {
+    async recordClickEvent(event) {
+      calls.push(["analytics", event]);
+    },
+  };
+
+  await getRedirectTarget(
+    {
+      shortCode: "100",
+      analyticsContext: {
+        ipAddress: "203.0.113.10",
+        userAgent: "Mozilla/5.0",
+        referrer: "https://linkedin.com",
+        country: "IN",
+      },
+    },
+    { analyticsService, urlRepository }
+  );
+
+  assert.deepEqual(calls, [
+    ["find", "100"],
+    ["increment", "100"],
+    [
+      "analytics",
+      {
+        shortCode: "100",
+        ipAddress: "203.0.113.10",
+        userAgent: "Mozilla/5.0",
+        referrer: "https://linkedin.com",
+        country: "IN",
+      },
+    ],
+  ]);
+});
+
+test("does not fail redirects when click analytics recording fails", async () => {
+  const warnings = [];
+  const urlRepository = {
+    async findByShortCode(shortCode) {
+      return {
+        short_code: shortCode,
+        long_url: "https://example.com/report",
+        expires_at: null,
+      };
+    },
+    async incrementClickCount() {},
+  };
+  const analyticsService = {
+    async recordClickEvent() {
+      throw new Error("MongoDB unavailable");
+    },
+  };
+
+  const result = await getRedirectTarget(
+    {
+      shortCode: "100",
+      analyticsContext: {
+        ipAddress: "203.0.113.10",
+      },
+    },
+    {
+      analyticsService,
+      logger: {
+        warn(...args) {
+          warnings.push(args);
+        },
+      },
+      urlRepository,
+    }
+  );
+
+  assert.equal(result.longUrl, "https://example.com/report");
+  assert.equal(warnings.length, 1);
+});
+
 test("returns 404 when redirect short code is missing", async () => {
   const urlRepository = {
     async findByShortCode() {
