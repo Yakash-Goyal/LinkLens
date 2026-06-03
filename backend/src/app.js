@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const analyticsRoutes = require("./routes/analyticsRoutes");
 const urlRoutes = require("./routes/urlRoutes");
 
 const app = express();
@@ -15,6 +16,7 @@ app.get("/health", (req, res) => {
   });
 });
 
+app.use("/analytics", analyticsRoutes);
 app.use("/", urlRoutes);
 
 app.use((req, res) => {
