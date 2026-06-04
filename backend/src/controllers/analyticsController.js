@@ -4,6 +4,8 @@ async function getAnalyticsSummary(req, res, next) {
   try {
     const summary = await analyticsService.getAnalyticsSummary({
       shortCode: req.params.shortCode,
+      from: req.query.from,
+      to: req.query.to,
     });
 
     res.status(200).json(summary);

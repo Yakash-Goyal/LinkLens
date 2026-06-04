@@ -48,12 +48,60 @@ function normalizeBreakdown(rows) {
   }));
 }
 
-function createBreakdownPipeline(shortCode, fieldName) {
+function parseDateRange({ from, to } = {}) {
+  const dateRange = {};
+
+  if (from) {
+    const fromDate = new Date(from);
+
+    if (Number.isNaN(fromDate.getTime())) {
+      throw createHttpError(400, "from must be a valid date");
+    }
+
+    dateRange.from = fromDate;
+  }
+
+  if (to) {
+    const toDate = new Date(to);
+
+    if (Number.isNaN(toDate.getTime())) {
+      throw createHttpError(400, "to must be a valid date");
+    }
+
+    dateRange.to = toDate;
+  }
+
+  if (dateRange.from && dateRange.to && dateRange.from > dateRange.to) {
+    throw createHttpError(400, "from must be before to");
+  }
+
+  return dateRange;
+}
+
+function createEventFilter(shortCode, dateRange = {}) {
+  const filter = {
+    shortCode,
+  };
+
+  if (dateRange.from || dateRange.to) {
+    filter.timestamp = {};
+
+    if (dateRange.from) {
+      filter.timestamp.$gte = dateRange.from;
+    }
+
+    if (dateRange.to) {
+      filter.timestamp.$lte = dateRange.to;
+    }
+  }
+
+  return filter;
+}
+
+function createBreakdownPipeline(shortCode, fieldName, dateRange) {
   return [
     {
-      $match: {
-        shortCode,
-      },
+      $match: createEventFilter(shortCode, dateRange),
     },
     {
       $group: {
@@ -72,12 +120,10 @@ function createBreakdownPipeline(shortCode, fieldName) {
   ];
 }
 
-function createDailyClicksPipeline(shortCode) {
+function createDailyClicksPipeline(shortCode, dateRange) {
   return [
     {
-      $match: {
-        shortCode,
-      },
+      $match: createEventFilter(shortCode, dateRange),
     },
     {
       $group: {
@@ -100,7 +146,7 @@ function createDailyClicksPipeline(shortCode) {
   ];
 }
 
-async function getAnalyticsSummary({ shortCode }, dependencies = {}) {
+async function getAnalyticsSummary({ shortCode, from, to }, dependencies = {}) {
   const repository = dependencies.urlRepository || urlRepository;
   const ClickEventModel = dependencies.ClickEventModel || ClickEvent;
   const urlRecord = await repository.findByShortCode(shortCode);
@@ -109,6 +155,8 @@ async function getAnalyticsSummary({ shortCode }, dependencies = {}) {
     throw createHttpError(404, "Short URL not found");
   }
 
+  const dateRange = parseDateRange({ from, to });
+  const eventFilter = createEventFilter(shortCode, dateRange);
   const [
     uniqueVisitorHashes,
     deviceRows,
@@ -116,16 +164,26 @@ async function getAnalyticsSummary({ shortCode }, dependencies = {}) {
     referrerRows,
     dailyRows,
   ] = await Promise.all([
-    ClickEventModel.distinct("hashedIp", { shortCode }),
-    ClickEventModel.aggregate(createBreakdownPipeline(shortCode, "deviceType")),
-    ClickEventModel.aggregate(createBreakdownPipeline(shortCode, "country")),
-    ClickEventModel.aggregate(createBreakdownPipeline(shortCode, "referrer")),
-    ClickEventModel.aggregate(createDailyClicksPipeline(shortCode)),
+    ClickEventModel.distinct("hashedIp", eventFilter),
+    ClickEventModel.aggregate(
+      createBreakdownPipeline(shortCode, "deviceType", dateRange)
+    ),
+    ClickEventModel.aggregate(
+      createBreakdownPipeline(shortCode, "country", dateRange)
+    ),
+    ClickEventModel.aggregate(
+      createBreakdownPipeline(shortCode, "referrer", dateRange)
+    ),
+    ClickEventModel.aggregate(createDailyClicksPipeline(shortCode, dateRange)),
   ]);
 
   return {
     shortCode,
     longUrl: urlRecord.long_url,
+    range: {
+      from: dateRange.from ? dateRange.from.toISOString() : null,
+      to: dateRange.to ? dateRange.to.toISOString() : null,
+    },
     totalClicks: Number(urlRecord.total_clicks || 0),
     uniqueVisitors: uniqueVisitorHashes.length,
     devices: normalizeBreakdown(deviceRows),
@@ -142,6 +200,8 @@ module.exports = {
   buildClickEvent,
   createBreakdownPipeline,
   createDailyClicksPipeline,
+  createEventFilter,
   getAnalyticsSummary,
+  parseDateRange,
   recordClickEvent,
 };

@@ -5,7 +5,9 @@ const {
   buildClickEvent,
   createBreakdownPipeline,
   createDailyClicksPipeline,
+  createEventFilter,
   getAnalyticsSummary,
+  parseDateRange,
   recordClickEvent,
 } = require("../src/services/analyticsService");
 
@@ -74,6 +76,41 @@ test("creates aggregation pipelines for analytics breakdowns", () => {
   });
   assert.deepEqual(devicePipeline[1].$group._id, "$deviceType");
   assert.deepEqual(dailyPipeline[1].$group._id.$dateToString.format, "%Y-%m-%d");
+});
+
+test("parses analytics reporting date ranges", () => {
+  const range = parseDateRange({
+    from: "2026-06-01T00:00:00.000Z",
+    to: "2026-06-03T23:59:59.000Z",
+  });
+
+  assert.equal(range.from.toISOString(), "2026-06-01T00:00:00.000Z");
+  assert.equal(range.to.toISOString(), "2026-06-03T23:59:59.000Z");
+});
+
+test("rejects invalid analytics reporting date ranges", () => {
+  assert.throws(() => parseDateRange({ from: "invalid" }), /valid date/);
+  assert.throws(() => parseDateRange({ to: "invalid" }), /valid date/);
+  assert.throws(
+    () =>
+      parseDateRange({
+        from: "2026-06-04T00:00:00.000Z",
+        to: "2026-06-03T00:00:00.000Z",
+      }),
+    /before/
+  );
+});
+
+test("creates MongoDB event filters for date ranges", () => {
+  const range = parseDateRange({
+    from: "2026-06-01T00:00:00.000Z",
+    to: "2026-06-03T23:59:59.000Z",
+  });
+  const filter = createEventFilter("abc123", range);
+
+  assert.equal(filter.shortCode, "abc123");
+  assert.equal(filter.timestamp.$gte.toISOString(), "2026-06-01T00:00:00.000Z");
+  assert.equal(filter.timestamp.$lte.toISOString(), "2026-06-03T23:59:59.000Z");
 });
 
 test("returns analytics summary from PostgreSQL and MongoDB data", async () => {
@@ -149,6 +186,10 @@ test("returns analytics summary from PostgreSQL and MongoDB data", async () => {
   assert.deepEqual(summary, {
     shortCode: "abc123",
     longUrl: "https://example.com/report",
+    range: {
+      from: null,
+      to: null,
+    },
     totalClicks: 8,
     uniqueVisitors: 2,
     devices: [
@@ -175,6 +216,55 @@ test("returns analytics summary from PostgreSQL and MongoDB data", async () => {
         count: 8,
       },
     ],
+  });
+});
+
+test("applies analytics date filters to MongoDB queries", async () => {
+  const filters = [];
+  const urlRepository = {
+    async findByShortCode() {
+      return {
+        short_code: "abc123",
+        long_url: "https://example.com/report",
+        total_clicks: "8",
+      };
+    },
+  };
+  const ClickEventModel = {
+    async distinct(field, filter) {
+      filters.push(filter);
+      return [];
+    },
+    async aggregate(pipeline) {
+      filters.push(pipeline[0].$match);
+      return [];
+    },
+  };
+
+  const summary = await getAnalyticsSummary(
+    {
+      shortCode: "abc123",
+      from: "2026-06-01T00:00:00.000Z",
+      to: "2026-06-03T23:59:59.000Z",
+    },
+    { ClickEventModel, urlRepository }
+  );
+
+  assert.equal(filters.length, 5);
+  for (const filter of filters) {
+    assert.equal(filter.shortCode, "abc123");
+    assert.equal(
+      filter.timestamp.$gte.toISOString(),
+      "2026-06-01T00:00:00.000Z"
+    );
+    assert.equal(
+      filter.timestamp.$lte.toISOString(),
+      "2026-06-03T23:59:59.000Z"
+    );
+  }
+  assert.deepEqual(summary.range, {
+    from: "2026-06-01T00:00:00.000Z",
+    to: "2026-06-03T23:59:59.000Z",
   });
 });
 
