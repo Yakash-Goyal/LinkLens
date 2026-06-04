@@ -16,6 +16,7 @@ async function createShortUrl(req, res, next) {
       process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
     const result = await shortenerService.createShortUrl({
       longUrl: req.body.longUrl,
+      customAlias: req.body.customAlias,
       expiresAt: req.body.expiresAt,
       baseUrl,
     });

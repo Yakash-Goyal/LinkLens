@@ -21,6 +21,23 @@ function validateHttpUrl(rawUrl) {
   }
 }
 
+function validateCustomAlias(customAlias) {
+  if (customAlias === undefined || customAlias === null || customAlias === "") {
+    return true;
+  }
+
+  if (typeof customAlias !== "string") {
+    return false;
+  }
+
+  const reservedAliases = new Set(["analytics", "health", "shorten"]);
+
+  return (
+    /^[a-zA-Z0-9_-]{3,10}$/.test(customAlias) &&
+    !reservedAliases.has(customAlias.toLowerCase())
+  );
+}
+
 function formatBaseUrl(baseUrl) {
   return baseUrl.replace(/\/+$/, "");
 }
@@ -34,7 +51,7 @@ function isExpired(record, now = new Date()) {
 }
 
 async function createShortUrl(
-  { longUrl, expiresAt = null, baseUrl },
+  { longUrl, customAlias, expiresAt = null, baseUrl },
   dependencies = {}
 ) {
   if (!validateHttpUrl(longUrl)) {
@@ -45,7 +62,32 @@ async function createShortUrl(
     throw createHttpError(500, "Base URL is not configured");
   }
 
+  if (!validateCustomAlias(customAlias)) {
+    throw createHttpError(
+      400,
+      "customAlias must be 3-10 URL-safe characters and cannot be reserved"
+    );
+  }
+
   const repository = dependencies.urlRepository || urlRepository;
+
+  if (customAlias) {
+    const customRecord = await repository.createUrlRecordWithShortCode({
+      longUrl,
+      shortCode: customAlias,
+      expiresAt,
+    });
+
+    return {
+      id: customRecord.id,
+      longUrl: customRecord.long_url,
+      shortCode: customRecord.short_code,
+      shortUrl: `${formatBaseUrl(baseUrl)}/${customRecord.short_code}`,
+      createdAt: customRecord.created_at,
+      expiresAt: customRecord.expires_at,
+    };
+  }
+
   const createdRecord = await repository.createUrlRecord({ longUrl, expiresAt });
   const shortCode = encodeBase62(BigInt(createdRecord.id));
   const updatedRecord = await repository.updateShortCode(
@@ -101,5 +143,6 @@ module.exports = {
   createShortUrl,
   getRedirectTarget,
   isExpired,
+  validateCustomAlias,
   validateHttpUrl,
 };

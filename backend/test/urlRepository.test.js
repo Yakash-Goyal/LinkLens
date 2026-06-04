@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const {
   createUrlRecord,
+  createUrlRecordWithShortCode,
   findByShortCode,
   incrementClickCount,
   updateShortCode,
@@ -56,6 +57,33 @@ test("updates a URL record with the generated short code", async () => {
   assert.equal(row, expectedRow);
   assert.match(db.calls[0].text, /UPDATE urls/);
   assert.deepEqual(db.calls[0].params, ["1", "1"]);
+});
+
+test("creates a URL record with a custom alias", async () => {
+  const expectedRow = {
+    id: "1",
+    short_code: "campaign1",
+    long_url: "https://example.com",
+    total_clicks: "0",
+  };
+  const db = createMockDb([expectedRow]);
+
+  const row = await createUrlRecordWithShortCode(
+    {
+      longUrl: "https://example.com",
+      shortCode: "campaign1",
+      expiresAt: null,
+    },
+    db
+  );
+
+  assert.equal(row, expectedRow);
+  assert.match(db.calls[0].text, /INSERT INTO urls \(short_code, long_url/);
+  assert.deepEqual(db.calls[0].params, [
+    "campaign1",
+    "https://example.com",
+    null,
+  ]);
 });
 
 test("finds a URL record by short code", async () => {

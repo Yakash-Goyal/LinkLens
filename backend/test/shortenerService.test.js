@@ -5,6 +5,7 @@ const {
   createShortUrl,
   getRedirectTarget,
   isExpired,
+  validateCustomAlias,
   validateHttpUrl,
 } = require("../src/services/shortenerService");
 
@@ -14,6 +15,16 @@ test("validates only http and https URLs", () => {
   assert.equal(validateHttpUrl("ftp://example.com"), false);
   assert.equal(validateHttpUrl("not-a-url"), false);
   assert.equal(validateHttpUrl(""), false);
+});
+
+test("validates custom aliases", () => {
+  assert.equal(validateCustomAlias(undefined), true);
+  assert.equal(validateCustomAlias("sale2026"), true);
+  assert.equal(validateCustomAlias("my-link"), true);
+  assert.equal(validateCustomAlias("ab"), false);
+  assert.equal(validateCustomAlias("this-is-too-long"), false);
+  assert.equal(validateCustomAlias("bad alias"), false);
+  assert.equal(validateCustomAlias("analytics"), false);
 });
 
 test("creates a short URL from a stored PostgreSQL ID", async () => {
@@ -68,6 +79,66 @@ test("creates a short URL from a stored PostgreSQL ID", async () => {
   assert.equal(result.shortCode, "100");
   assert.equal(result.shortUrl, "http://localhost:5000/100");
   assert.equal(result.longUrl, "https://example.com/report");
+});
+
+test("creates a short URL with a custom alias", async () => {
+  const calls = [];
+  const urlRepository = {
+    async createUrlRecordWithShortCode(payload) {
+      calls.push(["createWithAlias", payload]);
+
+      return {
+        id: "1",
+        short_code: payload.shortCode,
+        long_url: payload.longUrl,
+        created_at: "2026-06-04T00:00:00.000Z",
+        expires_at: null,
+      };
+    },
+  };
+
+  const result = await createShortUrl(
+    {
+      longUrl: "https://example.com/report",
+      customAlias: "btstag",
+      baseUrl: "http://localhost:5000/",
+    },
+    { urlRepository }
+  );
+
+  assert.deepEqual(calls, [
+    [
+      "createWithAlias",
+      {
+        longUrl: "https://example.com/report",
+        shortCode: "btstag",
+        expiresAt: null,
+      },
+    ],
+  ]);
+  assert.equal(result.shortCode, "btstag");
+  assert.equal(result.shortUrl, "http://localhost:5000/btstag");
+});
+
+test("rejects invalid custom aliases before writing to storage", async () => {
+  const urlRepository = {
+    async createUrlRecordWithShortCode() {
+      throw new Error("Repository should not be called");
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      createShortUrl(
+        {
+          longUrl: "https://example.com/report",
+          customAlias: "analytics",
+          baseUrl: "http://localhost:5000",
+        },
+        { urlRepository }
+      ),
+    /customAlias/
+  );
 });
 
 test("rejects invalid long URLs before writing to storage", async () => {

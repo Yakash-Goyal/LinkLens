@@ -11,6 +11,20 @@ async function createUrlRecord({ longUrl, expiresAt = null }, db = postgres) {
   return result.rows[0];
 }
 
+async function createUrlRecordWithShortCode(
+  { longUrl, shortCode, expiresAt = null },
+  db = postgres
+) {
+  const result = await db.query(
+    `INSERT INTO urls (short_code, long_url, expires_at)
+     VALUES ($1, $2, $3)
+     RETURNING id, short_code, long_url, created_at, expires_at, total_clicks`,
+    [shortCode, longUrl, expiresAt]
+  );
+
+  return result.rows[0];
+}
+
 async function updateShortCode(id, shortCode, db = postgres) {
   const result = await db.query(
     `UPDATE urls
@@ -48,6 +62,7 @@ async function incrementClickCount(shortCode, db = postgres) {
 
 module.exports = {
   createUrlRecord,
+  createUrlRecordWithShortCode,
   updateShortCode,
   findByShortCode,
   incrementClickCount,
