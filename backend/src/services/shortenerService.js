@@ -38,6 +38,24 @@ function validateCustomAlias(customAlias) {
   );
 }
 
+function parseExpiresAt(expiresAt, now = new Date()) {
+  if (expiresAt === undefined || expiresAt === null || expiresAt === "") {
+    return null;
+  }
+
+  const parsedDate = new Date(expiresAt);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    throw createHttpError(400, "expiresAt must be a valid date");
+  }
+
+  if (parsedDate <= now) {
+    throw createHttpError(400, "expiresAt must be in the future");
+  }
+
+  return parsedDate.toISOString();
+}
+
 function formatBaseUrl(baseUrl) {
   return baseUrl.replace(/\/+$/, "");
 }
@@ -70,12 +88,13 @@ async function createShortUrl(
   }
 
   const repository = dependencies.urlRepository || urlRepository;
+  const normalizedExpiresAt = parseExpiresAt(expiresAt, dependencies.now);
 
   if (customAlias) {
     const customRecord = await repository.createUrlRecordWithShortCode({
       longUrl,
       shortCode: customAlias,
-      expiresAt,
+      expiresAt: normalizedExpiresAt,
     });
 
     return {
@@ -88,7 +107,10 @@ async function createShortUrl(
     };
   }
 
-  const createdRecord = await repository.createUrlRecord({ longUrl, expiresAt });
+  const createdRecord = await repository.createUrlRecord({
+    longUrl,
+    expiresAt: normalizedExpiresAt,
+  });
   const shortCode = encodeBase62(BigInt(createdRecord.id));
   const updatedRecord = await repository.updateShortCode(
     createdRecord.id,
@@ -143,6 +165,7 @@ module.exports = {
   createShortUrl,
   getRedirectTarget,
   isExpired,
+  parseExpiresAt,
   validateCustomAlias,
   validateHttpUrl,
 };

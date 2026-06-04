@@ -5,6 +5,7 @@ const {
   createShortUrl,
   getRedirectTarget,
   isExpired,
+  parseExpiresAt,
   validateCustomAlias,
   validateHttpUrl,
 } = require("../src/services/shortenerService");
@@ -25,6 +26,27 @@ test("validates custom aliases", () => {
   assert.equal(validateCustomAlias("this-is-too-long"), false);
   assert.equal(validateCustomAlias("bad alias"), false);
   assert.equal(validateCustomAlias("analytics"), false);
+});
+
+test("parses valid future expiration dates", () => {
+  const expiresAt = parseExpiresAt(
+    "2026-06-05T10:00:00.000Z",
+    new Date("2026-06-04T10:00:00.000Z")
+  );
+
+  assert.equal(expiresAt, "2026-06-05T10:00:00.000Z");
+  assert.equal(parseExpiresAt(null), null);
+  assert.equal(parseExpiresAt(""), null);
+});
+
+test("rejects invalid or past expiration dates", () => {
+  const now = new Date("2026-06-04T10:00:00.000Z");
+
+  assert.throws(() => parseExpiresAt("not-a-date", now), /valid date/);
+  assert.throws(
+    () => parseExpiresAt("2026-06-04T09:59:59.000Z", now),
+    /future/
+  );
 });
 
 test("creates a short URL from a stored PostgreSQL ID", async () => {
@@ -79,6 +101,76 @@ test("creates a short URL from a stored PostgreSQL ID", async () => {
   assert.equal(result.shortCode, "100");
   assert.equal(result.shortUrl, "http://localhost:5000/100");
   assert.equal(result.longUrl, "https://example.com/report");
+});
+
+test("normalizes expiration before creating a short URL", async () => {
+  const calls = [];
+  const urlRepository = {
+    async createUrlRecord(payload) {
+      calls.push(["create", payload]);
+
+      return {
+        id: "3844",
+        long_url: payload.longUrl,
+        short_code: null,
+      };
+    },
+    async updateShortCode(id, shortCode) {
+      calls.push(["update", { id, shortCode }]);
+
+      return {
+        id,
+        short_code: shortCode,
+        long_url: "https://example.com/report",
+        created_at: "2026-06-04T00:00:00.000Z",
+        expires_at: "2026-06-05T10:00:00.000Z",
+      };
+    },
+  };
+
+  await createShortUrl(
+    {
+      longUrl: "https://example.com/report",
+      expiresAt: "2026-06-05T10:00:00.000Z",
+      baseUrl: "http://localhost:5000",
+    },
+    {
+      now: new Date("2026-06-04T10:00:00.000Z"),
+      urlRepository,
+    }
+  );
+
+  assert.deepEqual(calls[0], [
+    "create",
+    {
+      longUrl: "https://example.com/report",
+      expiresAt: "2026-06-05T10:00:00.000Z",
+    },
+  ]);
+});
+
+test("rejects expired links before writing to storage", async () => {
+  const urlRepository = {
+    async createUrlRecord() {
+      throw new Error("Repository should not be called");
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      createShortUrl(
+        {
+          longUrl: "https://example.com/report",
+          expiresAt: "2026-06-04T09:59:59.000Z",
+          baseUrl: "http://localhost:5000",
+        },
+        {
+          now: new Date("2026-06-04T10:00:00.000Z"),
+          urlRepository,
+        }
+      ),
+    /future/
+  );
 });
 
 test("creates a short URL with a custom alias", async () => {
