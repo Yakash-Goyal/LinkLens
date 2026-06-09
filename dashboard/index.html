@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LinkLens Dashboard</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>LinkLens</h1>
+          <p>Short links and click analytics</p>
+        </div>
+        <label class="api-field">
+          <span>API</span>
+          <input id="apiBaseUrl" value="http://localhost:5000" />
+        </label>
+      </header>
+
+      <section class="workspace">
+        <section class="panel create-panel">
+          <div class="panel-head">
+            <h2>Create Link</h2>
+          </div>
+          <form id="shortenForm" class="stack">
+            <label>
+              <span>Destination URL</span>
+              <input
+                id="longUrl"
+                type="url"
+                placeholder="https://example.com/report"
+                required
+              />
+            </label>
+            <div class="grid-2">
+              <label>
+                <span>Alias</span>
+                <input id="customAlias" placeholder="btstag" maxlength="10" />
+              </label>
+              <label>
+                <span>Expires</span>
+                <input id="expiresAt" type="datetime-local" />
+              </label>
+            </div>
+            <button type="submit">Create Short Link</button>
+          </form>
+          <div id="shortenResult" class="result-box is-empty"></div>
+        </section>
+
+        <section class="panel analytics-panel">
+          <div class="panel-head">
+            <h2>Analytics</h2>
+          </div>
+          <form id="analyticsForm" class="analytics-form">
+            <label>
+              <span>Short code</span>
+              <input id="analyticsShortCode" placeholder="abc123" required />
+            </label>
+            <label>
+              <span>From</span>
+              <input id="fromDate" type="date" />
+            </label>
+            <label>
+              <span>To</span>
+              <input id="toDate" type="date" />
+            </label>
+            <button type="submit">Load</button>
+          </form>
+
+          <div class="metric-grid">
+            <article class="metric">
+              <span>Total Clicks</span>
+              <strong id="totalClicks">0</strong>
+            </article>
+            <article class="metric">
+              <span>Unique Visitors</span>
+              <strong id="uniqueVisitors">0</strong>
+            </article>
+            <article class="metric">
+              <span>Top Device</span>
+              <strong id="topDevice">-</strong>
+            </article>
+            <article class="metric">
+              <span>Top Referrer</span>
+              <strong id="topReferrer">-</strong>
+            </article>
+          </div>
+
+          <div class="charts">
+            <section class="chart-panel">
+              <h3>Daily Clicks</h3>
+              <canvas id="dailyClicksChart" width="720" height="240"></canvas>
+            </section>
+            <section class="chart-panel">
+              <h3>Devices</h3>
+              <canvas id="deviceChart" width="720" height="220"></canvas>
+            </section>
+            <section class="chart-panel">
+              <h3>Countries</h3>
+              <canvas id="countryChart" width="720" height="220"></canvas>
+            </section>
+            <section class="chart-panel">
+              <h3>Referrers</h3>
+              <canvas id="referrerChart" width="720" height="220"></canvas>
+            </section>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
