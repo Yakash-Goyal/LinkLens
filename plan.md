@@ -99,10 +99,11 @@ Used for:
 - React
 - Chart.js or Recharts
 
-## DevOps
+## Local Development
 
-- Docker
-- Docker Compose
+- Local Node.js server
+- Local PostgreSQL
+- Local MongoDB
 
 ---
 
@@ -468,10 +469,6 @@ src/
 
 dashboard/
 
-Dockerfile
-
-docker-compose.yml
-
 server.js
 
 .env
@@ -569,7 +566,7 @@ Built a scalable URL shortening and analytics platform using Node.js, PostgreSQL
 ## Week 3
 
 - Dashboard
-- Docker
+- Local setup documentation
 - Deployment
 - Documentation
 

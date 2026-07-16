@@ -24,12 +24,30 @@ Dashboard
 
 PostgreSQL is the source of truth for URL records. MongoDB stores high-volume click events that can be aggregated by device, country, referrer, visitor, and date.
 
-## Run With Docker
+## Prerequisites
 
-From the project root:
+Install these locally:
+
+- Node.js
+- PostgreSQL
+- MongoDB
+
+Create a PostgreSQL database named:
+
+```text
+linklens
+```
+
+## Run Backend Locally
+
+Create `backend/.env` from `backend/.env.example`, then start PostgreSQL and MongoDB locally.
+
+From the backend folder:
 
 ```bash
-docker compose up --build
+cd backend
+npm install
+npm start
 ```
 
 The API runs at:
@@ -38,20 +56,14 @@ The API runs at:
 http://localhost:5000
 ```
 
-Open the dashboard file:
+The backend runs the PostgreSQL migration automatically during startup.
+
+## Open Dashboard
+
+Open this file in your browser:
 
 ```text
 dashboard/index.html
-```
-
-## Run Backend Locally
-
-Start PostgreSQL and MongoDB locally, then create `backend/.env` from `backend/.env.example`.
-
-```bash
-cd backend
-npm install
-npm start
 ```
 
 ## API Examples
